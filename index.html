@@ -1,0 +1,855 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SentinelGuard | Mobile Hardware Security Dashboard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        cyber: {
+                            dark: '#0a0d14',
+                            card: '#121722',
+                            border: '#1f293d',
+                            green: '#00f090',
+                            red: '#ff3b5c',
+                            amber: '#ffb020',
+                            blue: '#00b8ff',
+                            purple: '#a855f7'
+                        }
+                    },
+                    fontFamily: {
+                        mono: ['JetBrains Mono', 'monospace'],
+                        sans: ['Inter', 'sans-serif']
+                    }
+                }
+            }
+        };
+    </script>
+    <!-- Fonts and Icons -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <!-- Plotly.js for dynamic interactive security charts -->
+    <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+    <style>
+        body { font-family: 'Inter', sans-serif; background-color: #0a0d14; color: #e2e8f0; }
+        .font-mono { font-family: 'JetBrains Mono', monospace; }
+        .glass-panel { background: rgba(18, 23, 34, 0.85); backdrop-filter: blur(12px); border: 1px solid rgba(31, 41, 61, 0.8); }
+        .glow-red { box-shadow: 0 0 15px rgba(255, 59, 92, 0.35); }
+        .glow-green { box-shadow: 0 0 15px rgba(0, 240, 144, 0.25); }
+        .glow-blue { box-shadow: 0 0 15px rgba(0, 184, 255, 0.25); }
+        /* Custom scrollbars */
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: #0a0d14; }
+        ::-webkit-scrollbar-thumb { background: #1f293d; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #3b82f6; }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col overflow-x-hidden selection:bg-cyber-blue selection:text-black">
+
+    <!-- Application Header -->
+    <header class="glass-panel sticky top-0 z-40 border-b border-cyber-border px-4 lg:px-6 py-3 flex flex-wrap items-center justify-between gap-4">
+        <div class="flex items-center gap-3">
+            <div class="p-2 rounded-xl bg-gradient-to-br from-cyber-blue/20 to-cyber-purple/20 border border-cyber-blue/40 text-cyber-blue">
+                <i data-lucide="shield-alert" class="w-6 h-6"></i>
+            </div>
+            <div>
+                <div class="flex items-center gap-2">
+                    <h1 class="text-lg font-bold tracking-tight text-white flex items-center gap-2">
+                        SentinelGuard <span class="text-xs px-2 py-0.5 rounded font-mono bg-cyber-blue/10 text-cyber-blue border border-cyber-blue/30">v2.4-mSec</span>
+                    </h1>
+                </div>
+                <p class="text-xs text-slate-400">Mobile Hardware Intrusion & Anomaly Monitor</p>
+            </div>
+        </div>
+
+        <!-- Global Status Badges & Controls -->
+        <div class="flex flex-wrap items-center gap-3">
+            <!-- Active Device Switcher -->
+            <div class="flex items-center gap-2 bg-slate-900/80 px-3 py-1.5 rounded-lg border border-cyber-border text-xs">
+                <i data-lucide="smartphone" class="w-4 h-4 text-cyber-blue"></i>
+                <select id="deviceSelector" class="bg-transparent text-slate-200 outline-none font-medium cursor-pointer">
+                    <option value="pixel8">Google Pixel 8 Pro (Android 14)</option>
+                    <option value="iphone15">iPhone 15 Pro Max (iOS 17.4)</option>
+                    <option value="samsung24">Samsung S24 Ultra (Knox Safe)</option>
+                </select>
+            </div>
+
+            <!-- Monitoring State Indicator -->
+            <div id="monitoringBadge" class="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-cyber-green/10 border border-cyber-green/30 text-cyber-green text-xs font-mono font-medium glow-green">
+                <span class="relative flex h-2 w-2">
+                    <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-cyber-green opacity-75"></span>
+                    <span class="relative inline-flex rounded-full h-2 w-2 bg-cyber-green"></span>
+                </span>
+                <span>24H Continuous Active</span>
+            </div>
+
+            <!-- Simulation Toggle -->
+            <button id="simToggleBtn" onclick="toggleSimulation()" class="px-3 py-1.5 rounded-lg bg-cyber-blue/20 hover:bg-cyber-blue/30 border border-cyber-blue/40 text-cyber-blue text-xs font-medium transition flex items-center gap-1.5">
+                <i data-lucide="pause" id="simToggleIcon" class="w-3.5 h-3.5"></i>
+                <span id="simToggleText">Pause Stream</span>
+            </button>
+
+            <!-- Attack Simulator Trigger Menu -->
+            <div class="relative group">
+                <button class="px-3 py-1.5 rounded-lg bg-cyber-red/20 hover:bg-cyber-red/30 border border-cyber-red/40 text-cyber-red text-xs font-semibold transition flex items-center gap-1.5 glow-red">
+                    <i data-lucide="zap" class="w-3.5 h-3.5"></i>
+                    <span>Simulate Attack</span>
+                    <i data-lucide="chevron-down" class="w-3 h-3"></i>
+                </button>
+                <div class="absolute right-0 mt-2 w-56 rounded-xl glass-panel border border-cyber-red/30 shadow-2xl py-1 hidden group-hover:block z-50">
+                    <button onclick="triggerAttack('MIC_BACKGROUND')" class="w-full text-left px-3 py-2 text-xs text-slate-300 hover:bg-cyber-red/20 hover:text-white flex items-center gap-2">
+                        <i data-lucide="mic-off" class="w-4 h-4 text-cyber-red"></i> Covert Mic Eavesdropping
+                    </button>
+                    <button onclick="triggerAttack('GPS_UNAUTHORIZED')" class="w-full text-left px-3 py-2 text-xs text-slate-300 hover:bg-cyber-red/20 hover:text-white flex items-center gap-2">
+                        <i data-lucide="map-pin-off" class="w-4 h-4 text-cyber-amber"></i> Location Exfiltration
+                    </button>
+                    <button onclick="triggerAttack('ROGUE_HOTSPOT')" class="w-full text-left px-3 py-2 text-xs text-slate-300 hover:bg-cyber-red/20 hover:text-white flex items-center gap-2">
+                        <i data-lucide="wifi-off" class="w-4 h-4 text-cyber-purple"></i> Rogue Hotspot & MitM
+                    </button>
+                    <button onclick="triggerAttack('NETWORK_EXFIL')" class="w-full text-left px-3 py-2 text-xs text-slate-300 hover:bg-cyber-red/20 hover:text-white flex items-center gap-2">
+                        <i data-lucide="radio shadow" class="w-4 h-4 text-cyber-blue"></i> High-Rate Data Exfiltration
+                    </button>
+                </div>
+            </div>
+
+            <!-- Payload & API Inspector Trigger -->
+            <button onclick="toggleInspectorModal(true)" class="p-2 rounded-lg bg-slate-800 hover:bg-slate-700 border border-cyber-border text-slate-300 hover:text-white transition" title="Inspect Encrypted AES Payload & API Routes">
+                <i data-lucide="code-2" class="w-4 h-4"></i>
+            </button>
+        </div>
+    </header>
+
+    <!-- FCM / OneSignal Real-time Push Notification Simulation Banner -->
+    <div id="fcmNotificationBanner" class="hidden mx-4 lg:mx-6 mt-4 p-4 rounded-xl glass-panel border border-cyber-red/50 bg-gradient-to-r from-cyber-red/20 via-cyber-card to-cyber-card shadow-2xl relative overflow-hidden transition-all duration-300 animate-bounce">
+        <div class="absolute -right-8 -bottom-8 w-32 h-32 bg-cyber-red/10 rounded-full blur-xl pointer-events-none"></div>
+        <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 relative z-10">
+            <div class="flex items-start gap-3">
+                <div class="p-2.5 rounded-lg bg-cyber-red/20 text-cyber-red border border-cyber-red/40 shrink-0">
+                    <i data-lucide="bell-ring" class="w-6 h-6 animate-pulse"></i>
+                </div>
+                <div>
+                    <div class="flex items-center gap-2">
+                        <span class="text-xs font-mono font-semibold px-2 py-0.5 rounded bg-cyber-red/20 text-cyber-red border border-cyber-red/30">FCM HIGH PRIORITY</span>
+                        <span class="text-xs text-slate-400 font-mono" id="alertTime">Just now</span>
+                    </div>
+                    <h3 class="font-bold text-white text-sm mt-0.5" id="alertTitle">Unauthorized Hardware Access Detected</h3>
+                    <p class="text-xs text-slate-300 mt-0.5" id="alertBody">Microphone active in background without active app UI (App: com.unknown.spyware)</p>
+                </div>
+            </div>
+            <div class="flex items-center gap-2 w-full sm:w-auto justify-end">
+                <button onclick="dismissNotification()" class="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-medium transition">
+                    Dismiss
+                </button>
+                <button onclick="autoRevokeAlertedPermission()" class="px-3 py-1.5 rounded-lg bg-cyber-red text-white hover:bg-red-600 text-xs font-semibold transition flex items-center gap-1.5 shadow-lg shadow-cyber-red/30">
+                    <i data-lucide="lock" class="w-3.5 h-3.5"></i> Revoke & Quarantine
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MAIN DASHBOARD CONTENT GRID -->
+    <main class="flex-1 p-4 lg:p-6 grid grid-cols-1 lg:grid-cols-12 gap-6">
+
+        <!-- LEFT COLUMN: Hardware Status Cards & Automated Inactivity Enforcement (4 cols) -->
+        <section class="lg:col-span-4 flex flex-col gap-6">
+
+            <!-- Real-time Hardware Indicators Grid -->
+            <div class="glass-panel rounded-2xl p-4 border border-cyber-border">
+                <div class="flex items-center justify-between mb-4">
+                    <h2 class="text-sm font-semibold text-slate-200 flex items-center gap-2">
+                        <i data-lucide="cpu" class="w-4 h-4 text-cyber-blue"></i> Hardware Monitor States
+                    </h2>
+                    <span class="text-[11px] font-mono text-slate-400">Live Hardware Hooks</span>
+                </div>
+
+                <div class="grid grid-cols-1 gap-2.5">
+                    <!-- GPS Tile -->
+                    <div id="tile-GPS" class="p-3 rounded-xl bg-slate-900/60 border border-cyber-border flex items-center justify-between transition-all">
+                        <div class="flex items-center gap-3">
+                            <div class="p-2 rounded-lg bg-cyber-blue/10 text-cyber-blue border border-cyber-blue/20">
+                                <i data-lucide="map-pin" class="w-4 h-4"></i>
+                            </div>
+                            <div>
+                                <div class="text-xs font-semibold text-slate-200">GPS Location</div>
+                                <div class="text-[11px] font-mono text-slate-400" id="sub-GPS">FusedLocationProvider • Idle</div>
+                            </div>
+                        </div>
+                        <span id="badge-GPS" class="px-2 py-1 rounded text-[10px] font-mono font-semibold bg-slate-800 text-slate-400 border border-slate-700">IDLE</span>
+                    </div>
+
+                    <!-- Microphone Tile -->
+                    <div id="tile-MIC" class="p-3 rounded-xl bg-slate-900/60 border border-cyber-border flex items-center justify-between transition-all">
+                        <div class="flex items-center gap-3">
+                            <div class="p-2 rounded-lg bg-cyber-amber/10 text-cyber-amber border border-cyber-amber/20">
+                                <i data-lucide="mic" class="w-4 h-4"></i>
+                            </div>
+                            <div>
+                                <div class="text-xs font-semibold text-slate-200">Microphone Input</div>
+                                <div class="text-[11px] font-mono text-slate-400" id="sub-MIC">AudioRecord • 44.1kHz</div>
+                            </div>
+                        </div>
+                        <span id="badge-MIC" class="px-2 py-1 rounded text-[10px] font-mono font-semibold bg-slate-800 text-slate-400 border border-slate-700">IDLE</span>
+                    </div>
+
+                    <!-- Wi-Fi Tile -->
+                    <div id="tile-WIFI" class="p-3 rounded-xl bg-slate-900/60 border border-cyber-border flex items-center justify-between transition-all">
+                        <div class="flex items-center gap-3">
+                            <div class="p-2 rounded-lg bg-cyber-green/10 text-cyber-green border border-cyber-green/20">
+                                <i data-lucide="wifi" class="w-4 h-4"></i>
+                            </div>
+                            <div>
+                                <div class="text-xs font-semibold text-slate-200">Wi-Fi Interface</div>
+                                <div class="text-[11px] font-mono text-slate-400" id="sub-WIFI">SSID: SecureCorp-5G</div>
+                            </div>
+                        </div>
+                        <span id="badge-WIFI" class="px-2 py-1 rounded text-[10px] font-mono font-semibold bg-cyber-green/20 text-cyber-green border border-cyber-green/40">CONNECTED</span>
+                    </div>
+
+                    <!-- Hotspot Tile -->
+                    <div id="tile-HOTSPOT" class="p-3 rounded-xl bg-slate-900/60 border border-cyber-border flex items-center justify-between transition-all">
+                        <div class="flex items-center gap-3">
+                            <div class="p-2 rounded-lg bg-cyber-purple/10 text-cyber-purple border border-cyber-purple/20">
+                                <i data-lucide="radio-tower" class="w-4 h-4"></i>
+                            </div>
+                            <div>
+                                <div class="text-xs font-semibold text-slate-200">Tethering / Hotspot</div>
+                                <div class="text-[11px] font-mono text-slate-400" id="sub-HOTSPOT">0 Devices Connected</div>
+                            </div>
+                        </div>
+                        <span id="badge-HOTSPOT" class="px-2 py-1 rounded text-[10px] font-mono font-semibold bg-slate-800 text-slate-400 border border-slate-700">INACTIVE</span>
+                    </div>
+
+                    <!-- Cellular Network Tile -->
+                    <div id="tile-NET" class="p-3 rounded-xl bg-slate-900/60 border border-cyber-border flex items-center justify-between transition-all">
+                        <div class="flex items-center gap-3">
+                            <div class="p-2 rounded-lg bg-cyber-blue/10 text-cyber-blue border border-cyber-blue/20">
+                                <i data-lucide="signal" class="w-4 h-4"></i>
+                            </div>
+                            <div>
+                                <div class="text-xs font-semibold text-slate-200">Cellular Modem</div>
+                                <div class="text-[11px] font-mono text-slate-400" id="sub-NET">5G NR • RSRP: -82dBm</div>
+                            </div>
+                        </div>
+                        <span id="badge-NET" class="px-2 py-1 rounded text-[10px] font-mono font-semibold bg-cyber-blue/20 text-cyber-blue border border-cyber-blue/40">ACTIVE</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ML Anomaly Model Engine Status Gauge -->
+            <div class="glass-panel rounded-2xl p-4 border border-cyber-border">
+                <div class="flex items-center justify-between mb-3">
+                    <h2 class="text-sm font-semibold text-slate-200 flex items-center gap-2">
+                        <i data-lucide="brain-circuit" class="w-4 h-4 text-cyber-purple"></i> ML Anomaly Detection Engine
+                    </h2>
+                    <span class="text-[10px] font-mono bg-cyber-purple/20 text-cyber-purple px-2 py-0.5 rounded border border-cyber-purple/30">IsolationForest + LSTM</span>
+                </div>
+
+                <div class="flex items-center justify-around py-2">
+                    <div class="text-center">
+                        <div class="text-2xl font-bold font-mono text-cyber-green" id="isoScore">0.02</div>
+                        <div class="text-[10px] text-slate-400 font-mono mt-0.5">IsoForest Anomaly Score</div>
+                        <div class="text-[9px] text-slate-500 font-mono">(Threshold &gt; 0.65)</div>
+                    </div>
+                    <div class="h-10 w-px bg-cyber-border"></div>
+                    <div class="text-center">
+                        <div class="text-2xl font-bold font-mono text-cyber-blue" id="lstmLoss">0.014</div>
+                        <div class="text-[10px] text-slate-400 font-mono mt-0.5">LSTM Reconstruct Error</div>
+                        <div class="text-[9px] text-slate-500 font-mono">(MAE Metric)</div>
+                    </div>
+                </div>
+
+                <!-- Anomaly Trend Bar -->
+                <div class="mt-3">
+                    <div class="flex justify-between text-[11px] font-mono text-slate-400 mb-1">
+                        <span>Threat Risk Index</span>
+                        <span id="riskLabel" class="text-cyber-green font-semibold">LOW (2%)</span>
+                    </div>
+                    <div class="w-full h-2 rounded-full bg-slate-900 overflow-hidden border border-cyber-border">
+                        <div id="riskProgressBar" class="h-full bg-gradient-to-r from-cyber-green via-cyber-amber to-cyber-red transition-all duration-500" style="width: 2%;"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Automated Hardware Inactivity & Permission Revocation Rules -->
+            <div class="glass-panel rounded-2xl p-4 border border-cyber-border">
+                <div class="flex items-center justify-between mb-3">
+                    <h2 class="text-sm font-semibold text-slate-200 flex items-center gap-2">
+                        <i data-lucide="shield-off" class="w-4 h-4 text-cyber-amber"></i> Inactivity Revocation Engine
+                    </h2>
+                    <span class="text-[10px] font-mono text-slate-400">24H Usage Policy</span>
+                </div>
+
+                <p class="text-xs text-slate-400 mb-3">Hardware idle for prolonged periods is flagged to reduce attack surface.</p>
+
+                <div id="inactivityCards" class="space-y-2">
+                    <!-- Dynamic Suggestion Cards populate here -->
+                </div>
+            </div>
+        </section>
+
+        <!-- CENTER / RIGHT COLUMN: Live Log Stream & Visual Reports (8 cols) -->
+        <section class="lg:col-span-8 flex flex-col gap-6">
+
+            <!-- Real-Time Interactive Plotly Visual Analytics -->
+            <div class="glass-panel rounded-2xl p-4 border border-cyber-border">
+                <div class="flex flex-wrap items-center justify-between gap-2 mb-4">
+                    <div>
+                        <h2 class="text-sm font-semibold text-slate-200 flex items-center gap-2">
+                            <i data-lucide="bar-chart-3" class="w-4 h-4 text-cyber-blue"></i> Hardware Activation Timelines & Density
+                        </h2>
+                        <p class="text-xs text-slate-400">Time-Series aggregated telemetry via TimescaleDB Hypertable</p>
+                    </div>
+                    <div class="flex items-center gap-2 bg-slate-900/80 p-1 rounded-lg border border-cyber-border text-xs">
+                        <button onclick="switchChartTab('timeline')" id="tabBtnTimeline" class="px-2.5 py-1 rounded-md bg-cyber-blue/20 text-cyber-blue font-medium transition">24H Timeline</button>
+                        <button onclick="switchChartTab('heatmap')" id="tabBtnHeatmap" class="px-2.5 py-1 rounded-md text-slate-400 hover:text-slate-200 transition">7-Day Heatmap</button>
+                    </div>
+                </div>
+
+                <!-- Plotly Chart Containers -->
+                <div id="timelinePlotContainer" class="w-full h-64"></div>
+                <div id="heatmapPlotContainer" class="w-full h-64 hidden"></div>
+            </div>
+
+            <!-- Live Hardware Telemetry Stream & Log Table -->
+            <div class="glass-panel rounded-2xl p-4 border border-cyber-border flex-1 flex flex-col">
+                <div class="flex flex-wrap items-center justify-between gap-3 mb-3">
+                    <div class="flex items-center gap-2">
+                        <h2 class="text-sm font-semibold text-slate-200 flex items-center gap-2">
+                            <i data-lucide="terminal" class="w-4 h-4 text-cyber-green"></i> Live Hardware Telemetry Stream
+                        </h2>
+                        <span id="eventCountBadge" class="px-2 py-0.5 rounded-full text-[10px] font-mono bg-cyber-blue/10 text-cyber-blue border border-cyber-blue/20">0 Events</span>
+                    </div>
+
+                    <!-- Log Filters -->
+                    <div class="flex items-center gap-2">
+                        <div class="relative">
+                            <i data-lucide="search" class="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-2"></i>
+                            <input type="text" id="logSearchInput" oninput="filterLogs()" placeholder="Filter app or HW..." class="bg-slate-900 text-xs text-slate-200 pl-8 pr-3 py-1 rounded-lg border border-cyber-border outline-none focus:border-cyber-blue w-36 sm:w-48">
+                        </div>
+                        <select id="logHardwareFilter" onchange="filterLogs()" class="bg-slate-900 text-xs text-slate-300 px-2 py-1 rounded-lg border border-cyber-border outline-none">
+                            <option value="ALL">All Hardware</option>
+                            <option value="GPS">GPS</option>
+                            <option value="MIC">Microphone</option>
+                            <option value="WIFI">Wi-Fi</option>
+                            <option value="HOTSPOT">Hotspot</option>
+                            <option value="NET">Cellular</option>
+                        </select>
+                    </div>
+                </div>
+
+                <!-- Event Stream Table -->
+                <div class="overflow-x-auto flex-1 rounded-xl border border-cyber-border bg-slate-950/70 max-h-80 overflow-y-auto">
+                    <table class="w-full text-left border-collapse">
+                        <thead class="sticky top-0 bg-slate-900 border-b border-cyber-border text-[11px] font-mono text-slate-400">
+                            <tr>
+                                <th class="p-2.5">TIMESTAMP</th>
+                                <th class="p-2.5">HARDWARE</th>
+                                <th class="p-2.5">STATUS</th>
+                                <th class="p-2.5">APPLICATION PACKAGE</th>
+                                <th class="p-2.5">SECURITY RISK</th>
+                                <th class="p-2.5 text-right">ENCRYPTION</th>
+                            </tr>
+                        </thead>
+                        <tbody id="eventLogTableBody" class="divide-y divide-cyber-border/40 text-xs font-mono">
+                            <!-- Live generated log rows go here -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+        </section>
+    </main>
+
+    <!-- System Architecture & AES-256 API Payload Inspector Modal -->
+    <div id="inspectorModal" class="fixed inset-0 bg-black/80 backdrop-blur-md z-50 flex items-center justify-center p-4 hidden">
+        <div class="glass-panel w-full max-w-4xl rounded-2xl border border-cyber-border overflow-hidden shadow-2xl flex flex-col max-h-[90vh]">
+            <div class="p-4 border-b border-cyber-border flex items-center justify-between bg-slate-900/80">
+                <div class="flex items-center gap-2">
+                    <i data-lucide="database shadow" class="w-5 h-5 text-cyber-blue"></i>
+                    <h3 class="font-bold text-white text-sm">System Pipeline, TimescaleDB & AES-256-GCM Inspector</h3>
+                </div>
+                <button onclick="toggleInspectorModal(false)" class="p-1 rounded bg-slate-800 text-slate-400 hover:text-white">
+                    <i data-lucide="x" class="w-5 h-5"></i>
+                </button>
+            </div>
+
+            <div class="p-6 overflow-y-auto space-y-6 text-xs font-mono">
+                <!-- Endpoint Route -->
+                <div class="p-3 rounded-xl bg-slate-950 border border-cyber-border flex items-center justify-between">
+                    <div>
+                        <span class="text-cyber-green font-bold">WSS STREAM:</span>
+                        <span class="text-slate-200">wss://api.sentinelguard.io/ws/v1/events?token=eyJhbGciOi...</span>
+                    </div>
+                    <span class="px-2 py-0.5 rounded bg-cyber-blue/20 text-cyber-blue text-[10px]">mTLS TLS 1.3</span>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <!-- Raw Encrypted Payload -->
+                    <div>
+                        <div class="text-slate-400 mb-1 flex items-center justify-between">
+                            <span>RAW CLIENT ENCRYPTED PAYLOAD (AES-256-GCM)</span>
+                            <i data-lucide="lock" class="w-3.5 h-3.5 text-cyber-green"></i>
+                        </div>
+                        <pre class="p-3 rounded-xl bg-slate-950 border border-cyber-border text-slate-300 overflow-x-auto text-[11px] h-48">
+{
+  "event_id": "c8d32b5e-26a1-432d-9df1-8e9f507bfa0a",
+  "device_id": "usr_pixel8_982310",
+  "nonce": "7f8a9b0c1d2e3f4a5b6c7d8e",
+  "ciphertext": "a1b2c3d4e5f67890a1b2c3d4e5f67890f1e2d3c4b5a69876",
+  "auth_tag": "88e9d0c1b2a3f4e5",
+  "client_timestamp_ms": 1726702364102
+}</pre>
+                    </div>
+
+                    <!-- Decrypted Server State -->
+                    <div>
+                        <div class="text-slate-400 mb-1 flex items-center justify-between">
+                            <span>SERVER DECRYPTED IN-MEMORY PAYLOAD</span>
+                            <i data-lucide="key-round" class="w-3.5 h-3.5 text-cyber-blue"></i>
+                        </div>
+                        <pre class="p-3 rounded-xl bg-slate-950 border border-cyber-border text-cyber-green overflow-x-auto text-[11px] h-48" id="modalDecryptedJson">
+{
+  "hardware_type": "MICROPHONE",
+  "event_status": "UNAUTHORIZED",
+  "duration_ms": 14200,
+  "foreground_app_package": "com.unknown.untrustedapp",
+  "is_system_app": false,
+  "iso_forest_anomaly": true,
+  "lstm_seq_loss": 0.842
+}</pre>
+                    </div>
+                </div>
+
+                <!-- TimescaleDB Hypertable Query -->
+                <div>
+                    <div class="text-slate-400 mb-1">TIMESCALEDB TIME-SERIES INGESTION SQL</div>
+                    <pre class="p-3 rounded-xl bg-slate-950 border border-cyber-border text-cyber-blue overflow-x-auto text-[11px]">
+INSERT INTO hardware_events (time, device_id, hardware_type, event_status, duration_ms, app_package, encrypted_payload)
+VALUES (NOW(), 'usr_pixel8_982310', 'MICROPHONE', 'UNAUTHORIZED', 14200, 'com.unknown.untrustedapp', 'a1b2c3d4e5f6...');</pre>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast Notification Container -->
+    <div id="toastContainer" class="fixed bottom-4 right-4 z-50 flex flex-col gap-2 pointer-events-none"></div>
+
+    <!-- JavaScript Application Logic -->
+    <script>
+        // Global State & Telemetry Storage
+        let isSimulating = true;
+        let simInterval = null;
+        let eventsLog = [];
+        let activeTab = 'timeline';
+        let currentAlertEvent = null;
+
+        const hardwareTypes = ['GPS', 'MIC', 'WIFI', 'HOTSPOT', 'NET'];
+        const samplePackages = [
+            { name: 'com.android.systemui', system: true, nameClean: 'System UI' },
+            { name: 'com.google.android.apps.maps', system: true, nameClean: 'Google Maps' },
+            { name: 'com.spotify.music', system: false, nameClean: 'Spotify' },
+            { name: 'com.whatsapp', system: false, nameClean: 'WhatsApp' },
+            { name: 'com.unknown.spyware', system: false, nameClean: 'Unknown Background Agent' },
+            { name: 'com.network.sniffer', system: false, nameClean: 'Rogue Packet Sniffer' }
+        ];
+
+        // Initialize Lucide Icons
+        lucide.createIcons();
+
+        // Window Load Handler
+        window.onload = function() {
+            initHistoricalData();
+            startEventSimulation();
+            renderTimelinePlot();
+            renderHeatmapPlot();
+            updateInactivityCards();
+        };
+
+        // Initialize 24-hour historical events
+        function initHistoricalData() {
+            const now = Date.now();
+            for (let i = 24; i >= 0; i--) {
+                const timestamp = new Date(now - i * 3600 * 1000);
+                const hw = hardwareTypes[Math.floor(Math.random() * hardwareTypes.length)];
+                const isAnomaly = Math.random() < 0.08;
+                const pkg = samplePackages[Math.floor(Math.random() * samplePackages.length)];
+
+                eventsLog.unshift({
+                    id: crypto.randomUUID(),
+                    timestamp: timestamp.toISOString(),
+                    timestampObj: timestamp,
+                    hardware: hw,
+                    status: isAnomaly ? 'UNAUTHORIZED' : (Math.random() > 0.4 ? 'ACTIVE' : 'IDLE'),
+                    appPackage: pkg.name,
+                    appName: pkg.nameClean,
+                    risk: isAnomaly ? 'HIGH' : 'NORMAL',
+                    isoScore: isAnomaly ? (0.7 + Math.random() * 0.25).toFixed(3) : (Math.random() * 0.2).toFixed(3),
+                    lstmLoss: isAnomaly ? (0.6 + Math.random() * 0.3).toFixed(3) : (Math.random() * 0.1).toFixed(3)
+                });
+            }
+            renderLogTable();
+        }
+
+        // Real-Time Event Simulation Engine
+        function startEventSimulation() {
+            if (simInterval) clearInterval(simInterval);
+            simInterval = setInterval(() => {
+                if (!isSimulating) return;
+
+                // 10% chance of an anomaly during routine simulation
+                const isAttack = Math.random() < 0.1;
+                const hw = hardwareTypes[Math.floor(Math.random() * hardwareTypes.length)];
+                
+                generateEvent(hw, isAttack ? 'ATTACK' : 'NORMAL');
+            }, 3000);
+        }
+
+        function generateEvent(hardware, mode = 'NORMAL', customApp = null) {
+            const now = new Date();
+            const isAnomaly = mode === 'ATTACK';
+            const pkg = customApp || (isAnomaly ? samplePackages[4] : samplePackages[Math.floor(Math.random() * samplePackages.length)]);
+
+            const event = {
+                id: crypto.randomUUID(),
+                timestamp: now.toISOString(),
+                timestampObj: now,
+                hardware: hardware,
+                status: isAnomaly ? 'UNAUTHORIZED' : 'ACTIVE',
+                appPackage: pkg.name,
+                appName: pkg.nameClean,
+                risk: isAnomaly ? 'HIGH' : 'NORMAL',
+                isoScore: isAnomaly ? (0.75 + Math.random() * 0.2).toFixed(3) : (Math.random() * 0.15).toFixed(3),
+                lstmLoss: isAnomaly ? (0.68 + Math.random() * 0.25).toFixed(3) : (Math.random() * 0.08).toFixed(3)
+            };
+
+            eventsLog.unshift(event);
+            if (eventsLog.length > 100) eventsLog.pop();
+
+            // Update UI Tile States
+            updateHardwareTile(hardware, event.status, event.appName);
+
+            // Update ML Scores
+            document.getElementById('isoScore').innerText = event.isoScore;
+            document.getElementById('lstmLoss').innerText = event.lstmLoss;
+            
+            const riskBar = document.getElementById('riskProgressBar');
+            const riskLabel = document.getElementById('riskLabel');
+            if (isAnomaly) {
+                riskBar.style.width = '88%';
+                riskLabel.innerText = 'HIGH (88%)';
+                riskLabel.className = 'text-cyber-red font-semibold animate-pulse';
+                
+                // Trigger FCM Push Alert Simulation
+                triggerFcmPush(event);
+            } else {
+                const normRisk = Math.floor(Math.random() * 15 + 2);
+                riskBar.style.width = `${normRisk}%`;
+                riskLabel.innerText = `LOW (${normRisk}%)`;
+                riskLabel.className = 'text-cyber-green font-semibold';
+            }
+
+            renderLogTable();
+            updateChartData(event);
+        }
+
+        // Hardware Tile UI Updates
+        function updateHardwareTile(hw, status, appName) {
+            const tile = document.getElementById(`tile-${hw}`);
+            const badge = document.getElementById(`badge-${hw}`);
+            const sub = document.getElementById(`sub-${hw}`);
+
+            if (!tile || !badge) return;
+
+            if (status === 'UNAUTHORIZED') {
+                tile.className = 'p-3 rounded-xl bg-cyber-red/10 border border-cyber-red/50 flex items-center justify-between transition-all glow-red';
+                badge.className = 'px-2 py-1 rounded text-[10px] font-mono font-semibold bg-cyber-red/20 text-cyber-red border border-cyber-red/40 animate-pulse';
+                badge.innerText = 'UNAUTHORIZED';
+                sub.innerText = `Active: ${appName}`;
+            } else if (status === 'ACTIVE') {
+                tile.className = 'p-3 rounded-xl bg-cyber-blue/10 border border-cyber-blue/40 flex items-center justify-between transition-all';
+                badge.className = 'px-2 py-1 rounded text-[10px] font-mono font-semibold bg-cyber-blue/20 text-cyber-blue border border-cyber-blue/40';
+                badge.innerText = 'ACTIVE';
+                sub.innerText = `Bound: ${appName}`;
+            } else {
+                tile.className = 'p-3 rounded-xl bg-slate-900/60 border border-cyber-border flex items-center justify-between transition-all';
+                badge.className = 'px-2 py-1 rounded text-[10px] font-mono font-semibold bg-slate-800 text-slate-400 border border-slate-700';
+                badge.innerText = 'IDLE';
+            }
+        }
+
+        // Trigger Attack Preset Simulations
+        function triggerAttack(attackType) {
+            switch(attackType) {
+                case 'MIC_BACKGROUND':
+                    showToast('Attack Triggered: Covert Background Recording', 'error');
+                    generateEvent('MIC', 'ATTACK', { name: 'com.unknown.spyware', nameClean: 'Silent Voice Recorder' });
+                    break;
+                case 'GPS_UNAUTHORIZED':
+                    showToast('Attack Triggered: Unauthorized Location Track', 'warning');
+                    generateEvent('GPS', 'ATTACK', { name: 'com.network.sniffer', nameClean: 'Location Exfiltrator' });
+                    break;
+                case 'ROGUE_HOTSPOT':
+                    showToast('Attack Triggered: Rogue Tethering Bridge', 'error');
+                    generateEvent('HOTSPOT', 'ATTACK', { name: 'com.rogue.tether', nameClean: 'Hotspot Hijacker' });
+                    break;
+                case 'NETWORK_EXFIL':
+                    showToast('Attack Triggered: Anomalous Data Exfiltration', 'error');
+                    generateEvent('NET', 'ATTACK', { name: 'com.data.exfil', nameClean: 'Trojan Packet Exfiltrator' });
+                    break;
+            }
+        }
+
+        // Trigger FCM Push Notification Simulation
+        function triggerFcmPush(event) {
+            currentAlertEvent = event;
+            const banner = document.getElementById('fcmNotificationBanner');
+            document.getElementById('alertTitle').innerText = `Security Threat: Unauthorized ${event.hardware} Access`;
+            document.getElementById('alertBody').innerText = `Anomalous access detected by ${event.appName} (${event.appPackage}). ML Anomaly Score: ${event.isoScore}`;
+            document.getElementById('alertTime').innerText = new Date().toLocaleTimeString();
+            
+            banner.classList.remove('hidden');
+        }
+
+        function dismissNotification() {
+            document.getElementById('fcmNotificationBanner').classList.add('hidden');
+        }
+
+        function autoRevokeAlertedPermission() {
+            if (currentAlertEvent) {
+                showToast(`Hardware permission for ${currentAlertEvent.hardware} revoked & quarantined!`, 'success');
+                updateHardwareTile(currentAlertEvent.hardware, 'IDLE', 'Quarantined');
+            }
+            dismissNotification();
+        }
+
+        // Render Hardware Telemetry Table
+        function renderLogTable() {
+            const tbody = document.getElementById('eventLogTableBody');
+            const searchVal = document.getElementById('logSearchInput').value.toLowerCase();
+            const hwFilter = document.getElementById('logHardwareFilter').value;
+
+            const filtered = eventsLog.filter(e => {
+                const matchesSearch = e.appName.toLowerCase().includes(searchVal) || e.appPackage.toLowerCase().includes(searchVal);
+                const matchesHw = hwFilter === 'ALL' || e.hardware === hwFilter;
+                return matchesSearch && matchesHw;
+            });
+
+            document.getElementById('eventCountBadge').innerText = `${filtered.length} Events Logged`;
+
+            tbody.innerHTML = filtered.map(e => `
+                <tr class="hover:bg-slate-900/60 transition ${e.status === 'UNAUTHORIZED' ? 'bg-cyber-red/10 border-l-2 border-cyber-red' : ''}">
+                    <td class="p-2.5 text-slate-300 font-mono text-[11px]">${new Date(e.timestamp).toLocaleTimeString()}</td>
+                    <td class="p-2.5">
+                        <span class="px-2 py-0.5 rounded text-[10px] font-bold ${
+                            e.hardware === 'MIC' ? 'bg-cyber-amber/20 text-cyber-amber' :
+                            e.hardware === 'GPS' ? 'bg-cyber-blue/20 text-cyber-blue' :
+                            e.hardware === 'WIFI' ? 'bg-cyber-green/20 text-cyber-green' :
+                            'bg-cyber-purple/20 text-cyber-purple'
+                        }">${e.hardware}</span>
+                    </td>
+                    <td class="p-2.5">
+                        <span class="${e.status === 'UNAUTHORIZED' ? 'text-cyber-red font-bold animate-pulse' : 'text-slate-300'}">${e.status}</span>
+                    </td>
+                    <td class="p-2.5 text-slate-300">
+                        <div class="font-semibold text-slate-200">${e.appName}</div>
+                        <div class="text-[10px] text-slate-500 font-mono">${e.appPackage}</div>
+                    </td>
+                    <td class="p-2.5">
+                        <span class="text-[10px] font-mono px-1.5 py-0.5 rounded ${e.risk === 'HIGH' ? 'bg-cyber-red/20 text-cyber-red border border-cyber-red/30' : 'bg-slate-800 text-slate-400'}">
+                            ${e.risk} (Iso: ${e.isoScore})
+                        </span>
+                    </td>
+                    <td class="p-2.5 text-right">
+                        <button onclick="toggleInspectorModal(true)" class="p-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-cyber-green transition" title="View AES-256 Key & Nonce">
+                            <i data-lucide="lock" class="w-3.5 h-3.5 inline"></i>
+                        </button>
+                    </td>
+                </tr>
+            `).join('');
+
+            lucide.createIcons();
+        }
+
+        function filterLogs() {
+            renderLogTable();
+        }
+
+        // Plotly Analytics Section
+        function renderTimelinePlot() {
+            const times = eventsLog.map(e => new Date(e.timestamp));
+            const hwData = {
+                GPS: eventsLog.map(e => e.hardware === 'GPS' ? 1 : 0),
+                MIC: eventsLog.map(e => e.hardware === 'MIC' ? 1 : 0),
+                WIFI: eventsLog.map(e => e.hardware === 'WIFI' ? 1 : 0),
+                HOTSPOT: eventsLog.map(e => e.hardware === 'HOTSPOT' ? 1 : 0)
+            };
+
+            const traces = [
+                { x: times, y: hwData.MIC, name: 'Microphone', type: 'scatter', mode: 'lines', line: { color: '#ffb020', width: 2 } },
+                { x: times, y: hwData.GPS, name: 'GPS Location', type: 'scatter', mode: 'lines', line: { color: '#00b8ff', width: 2 } },
+                { x: times, y: hwData.WIFI, name: 'Wi-Fi', type: 'scatter', mode: 'lines', line: { color: '#00f090', width: 2 } },
+                { x: times, y: hwData.HOTSPOT, name: 'Hotspot', type: 'scatter', mode: 'lines', line: { color: '#a855f7', width: 2 } }
+            ];
+
+            const layout = {
+                paper_bgcolor: 'rgba(0,0,0,0)',
+                plot_bgcolor: 'rgba(0,0,0,0)',
+                margin: { l: 30, r: 20, t: 10, b: 30 },
+                xaxis: { color: '#64748b', showgrid: true, gridcolor: '#1f293d' },
+                yaxis: { color: '#64748b', showgrid: true, gridcolor: '#1f293d', range: [-0.1, 1.2] },
+                legend: { orientation: 'h', y: 1.15, font: { color: '#94a3b8', size: 10 } },
+                autosize: true
+            };
+
+            Plotly.newPlot('timelinePlotContainer', traces, layout, { responsive: true, displayModeBar: false });
+        }
+
+        function renderHeatmapPlot() {
+            const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+            const hours = Array.from({length: 24}, (_, i) => `${i}:00`);
+            
+            // Generate realistic hourly hardware intensity matrix
+            const zData = days.map(() => hours.map(() => Math.floor(Math.random() * 20)));
+
+            const data = [{
+                z: zData,
+                x: hours,
+                y: days,
+                type: 'heatmap',
+                colorscale: [
+                    [0, '#0a0d14'],
+                    [0.5, '#00b8ff'],
+                    [1, '#ff3b5c']
+                ]
+            }];
+
+            const layout = {
+                paper_bgcolor: 'rgba(0,0,0,0)',
+                plot_bgcolor: 'rgba(0,0,0,0)',
+                margin: { l: 40, r: 20, t: 10, b: 30 },
+                xaxis: { color: '#64748b', tickangle: -45 },
+                yaxis: { color: '#64748b' }
+            };
+
+            Plotly.newPlot('heatmapPlotContainer', data, layout, { responsive: true, displayModeBar: false });
+        }
+
+        function updateChartData(newEvent) {
+            Plotly.extendTraces('timelinePlotContainer', {
+                x: [[new Date(newEvent.timestamp)], [new Date(newEvent.timestamp)], [new Date(newEvent.timestamp)], [new Date(newEvent.timestamp)]],
+                y: [
+                    [newEvent.hardware === 'MIC' ? 1 : 0],
+                    [newEvent.hardware === 'GPS' ? 1 : 0],
+                    [newEvent.hardware === 'WIFI' ? 1 : 0],
+                    [newEvent.hardware === 'HOTSPOT' ? 1 : 0]
+                ]
+            }, [0, 1, 2, 3]);
+        }
+
+        function switchChartTab(tab) {
+            activeTab = tab;
+            const tContainer = document.getElementById('timelinePlotContainer');
+            const hContainer = document.getElementById('heatmapPlotContainer');
+            const tBtn = document.getElementById('tabBtnTimeline');
+            const hBtn = document.getElementById('tabBtnHeatmap');
+
+            if (tab === 'timeline') {
+                tContainer.classList.remove('hidden');
+                hContainer.classList.add('hidden');
+                tBtn.className = 'px-2.5 py-1 rounded-md bg-cyber-blue/20 text-cyber-blue font-medium transition';
+                hBtn.className = 'px-2.5 py-1 rounded-md text-slate-400 hover:text-slate-200 transition';
+            } else {
+                tContainer.classList.add('hidden');
+                hContainer.classList.remove('hidden');
+                hBtn.className = 'px-2.5 py-1 rounded-md bg-cyber-blue/20 text-cyber-blue font-medium transition';
+                tBtn.className = 'px-2.5 py-1 rounded-md text-slate-400 hover:text-slate-200 transition';
+                renderHeatmapPlot();
+            }
+        }
+
+        // Dynamic Automated Inactivity Revocation Engine
+        function updateInactivityCards() {
+            const container = document.getElementById('inactivityCards');
+            const items = [
+                { hw: 'Hotspot / Tethering', idle: 'Incurred 6 hours inactivity', impact: 'Low attack surface risk', code: 'HOTSPOT' },
+                { hw: 'Microphone Stream', idle: 'Unused by active foreground apps for 3h', impact: 'Eavesdropping risk', code: 'MIC' }
+            ];
+
+            container.innerHTML = items.map(i => `
+                <div id="inactCard-${i.code}" class="p-3 rounded-xl bg-slate-900/80 border border-cyber-border flex items-center justify-between gap-2">
+                    <div>
+                        <div class="text-xs font-semibold text-slate-200">${i.hw}</div>
+                        <div class="text-[10px] text-cyber-amber font-mono">${i.idle}</div>
+                    </div>
+                    <button onclick="revokeInactivePermission('${i.code}')" class="px-2 py-1 rounded bg-cyber-amber/20 hover:bg-cyber-amber/30 text-cyber-amber border border-cyber-amber/30 text-[10px] font-mono transition shrink-0">
+                        Revoke Access
+                    </button>
+                </div>
+            `).join('');
+        }
+
+        function revokeInactivePermission(code) {
+            const card = document.getElementById(`inactCard-${code}`);
+            if (card) card.remove();
+            showToast(`Hardware permission for ${code} revoked automatically due to inactivity!`, 'success');
+            updateHardwareTile(code, 'IDLE', 'Permission Revoked');
+        }
+
+        // Global Simulation Play/Pause Toggle
+        function toggleSimulation() {
+            isSimulating = !isSimulating;
+            const icon = document.getElementById('simToggleIcon');
+            const text = document.getElementById('simToggleText');
+            const badge = document.getElementById('monitoringBadge');
+
+            if (isSimulating) {
+                icon.setAttribute('data-lucide', 'pause');
+                text.innerText = 'Pause Stream';
+                badge.className = 'flex items-center gap-2 px-3 py-1.5 rounded-lg bg-cyber-green/10 border border-cyber-green/30 text-cyber-green text-xs font-mono font-medium glow-green';
+            } else {
+                icon.setAttribute('data-lucide', 'play');
+                text.innerText = 'Resume Stream';
+                badge.className = 'flex items-center gap-2 px-3 py-1.5 rounded-lg bg-cyber-amber/10 border border-cyber-amber/30 text-cyber-amber text-xs font-mono font-medium';
+            }
+            lucide.createIcons();
+        }
+
+        // Modal Toggle
+        function toggleInspectorModal(show) {
+            const modal = document.getElementById('inspectorModal');
+            if (show) modal.classList.remove('hidden');
+            else modal.classList.add('hidden');
+        }
+
+        // Custom Toast Notification System
+        function showToast(message, type = 'info') {
+            const container = document.getElementById('toastContainer');
+            const toast = document.createElement('div');
+            
+            const borderCol = type === 'error' ? 'border-cyber-red bg-cyber-red/20 text-cyber-red' :
+                              type === 'warning' ? 'border-cyber-amber bg-cyber-amber/20 text-cyber-amber' :
+                              'border-cyber-green bg-cyber-green/20 text-cyber-green';
+
+            toast.className = `p-3 rounded-xl glass-panel border ${borderCol} text-xs font-mono shadow-2xl flex items-center gap-2 pointer-events-auto transition-all duration-300 transform translate-y-2 opacity-0`;
+            toast.innerHTML = `<i data-lucide="${type === 'error' ? 'alert-triangle' : 'check-circle'}" class="w-4 h-4"></i> ${message}`;
+
+            container.appendChild(toast);
+            lucide.createIcons();
+
+            setTimeout(() => {
+                toast.classList.remove('translate-y-2', 'opacity-0');
+            }, 10);
+
+            setTimeout(() => {
+                toast.classList.add('opacity-0');
+                setTimeout(() => toast.remove(), 300);
+            }, 4000);
+        }
+    </script>
+</body>
+</html>
